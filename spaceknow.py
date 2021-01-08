@@ -69,7 +69,7 @@ def evaluatesCosts(scenes, extent, permissions, token):
   pipeline.start()
   print("Created Pipeline. Waiting for results...")
   analysis = pipeline.join()
-  if 'allocatedCredits' not in analysis:
+  if not analysis or 'allocatedCredits' not in analysis:
     raise SpaceKnowError('Cost analysis is not available', 503)
   return analysis
     
@@ -122,6 +122,6 @@ if __name__ == "__main__":
     print("Credits required: %.4f" % costAnalysis['allocatedCredits'])
   except SpaceKnowError as e:
     logger.error("Error {}: {}".format(str(e.status_code), e.error))
-    print("Error during the download check spaceknow.log for details")
+    print("Error during the processing check spaceknow.log for details")
     exit()
   #app.run()
