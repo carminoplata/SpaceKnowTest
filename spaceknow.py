@@ -12,10 +12,11 @@ from flask import Flask, request, jsonify
 from functools import wraps
 from geojson import GeometryCollection
 from json import JSONDecodeError
+from kraken import KrakenConsumer, KrakenProducer, MapsQueue
 from pipeline import Pipeline
 from requests.exceptions import ConnectionError
 from utils import authenticate, getPermissions, process, logger, SpaceKnowError, \
-  validateAccessRights
+  validateAccessRights, buildPermission
 
 def createBrisbaneArea():
   try:
@@ -34,8 +35,8 @@ def createBrisbaneArea():
 def prepare_searchReq(area):
   data = {'provider':os.getenv('PROVIDER_GBDX'),
           'dataset': os.getenv('GBDX_IDAHO_DB'),
-          'startDatetime': '2018-04-01 00:00:00',
-          'endDatetime': '2018-04-30 23:59:59',
+          'startDatetime': '2018-01-01 00:00:00',
+          'endDatetime': '2018-01-31 23:59:59',
           'onlyDownloadable': True,
           'extent': area}
   return json.dumps(data)
@@ -51,7 +52,7 @@ def createEvaluationRequest(scenes, extent):
   return json.dumps(evRequest)
 
 def searchImagery(permissions, token, extent):
-  validateAccessRights(os.getenv('IMG_AVAILABILITY'), permissions)
+  validateAccessRights([os.getenv('IMG_AVAILABILITY')], permissions)
   url = utils.SK_IMAGE_API + '/search'
   pipeline = Pipeline(url, token, prepare_searchReq(extent))
   pipeline.start()
@@ -62,7 +63,7 @@ def searchImagery(permissions, token, extent):
   return response['results']
   
 def evaluatesCosts(scenes, extent, permissions, token):
-  validateAccessRights(os.getenv('KRAKEN_DRY_RUN'), permissions)
+  validateAccessRights([os.getenv('KRAKEN_DRY_RUN')], permissions)
   data = createEvaluationRequest(scenes, extent)
   url = utils.SK_KRAKEN_API + '/dry-run'
   pipeline = Pipeline(url, token, data)
@@ -72,7 +73,30 @@ def evaluatesCosts(scenes, extent, permissions, token):
   if not analysis or 'allocatedCredits' not in analysis:
     raise SpaceKnowError('Cost analysis is not available', 503)
   return analysis
-    
+
+def getCreditsAvailable(token, permissions):
+  validateAccessRights([os.getenv('CREDITS_AVAILABLE')], permissions)
+  url = utils.SK_CREDIT_API + '/get-remaining-credit'
+  response = process(url=url, token=token)
+  if 'remainingCredit' not in response:
+    raise SpaceKnowError('Invalid response from server', 500)
+  return response['remainingCredit']
+
+def executeAnalysis(scenes, token, permissions, extent):
+  permissionsNeeds = [os.getenv('KRAKEN_RELEASE'),
+                      buildPermission(os.getenv('ALGORITHM_CAR_DETECTION'),
+                                      os.getenv('PROVIDER_GBDX'),
+                                      os.getenv('GBDX_IDAHO_DB'))]
+  validateAccessRights(permissionsNeeds, permissions)
+  mapsQueue = MapsQueue(len(scenes))
+  producer = KrakenProducer('cars', scenes, extent, mapsQueue, token)
+  consumer = KrakenConsumer(mapsQueue, token)
+  producer.start()
+  consumer.start()
+  print("Cars detection algortihm started")
+  producer.join()
+  tiles = consumer.join()
+  return tiles
 
 """
 class SpaceKnowManager:
@@ -120,6 +144,16 @@ if __name__ == "__main__":
     print("Brisbane Area size to analyze: %.4f km2" % costAnalysis['analyzedKm2'])
     print("Brisbane Area allocated size: %.4f km2" % costAnalysis['allocatedKm2'])
     print("Credits required: %.4f" % costAnalysis['allocatedCredits'])
+    userCredits = getCreditsAvailable(token, permissions)
+    if userCredits < costAnalysis['allocatedCredits'] :
+      print("Impossible to make analysis!\n The user %s does not have enough"
+            " credits.\n Available credits: %.2f" % (os.getenv('USERNAME'), 
+            userCredits))
+      exit()
+   
+    print("My credits: %.2f" % userCredits)
+    tiles = executeAnalysis(scenes, permissions, token, area)
+    print("Detected %d cars in Brisbane Area" % len(tiles))
   except SpaceKnowError as e:
     logger.error("Error {}: {}".format(str(e.status_code), e.error))
     print("Error during the processing check spaceknow.log for details")

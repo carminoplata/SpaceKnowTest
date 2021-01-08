@@ -16,6 +16,7 @@ SK_TASK_API = os.getenv('SK_TASK_API')
 SK_KRAKEN_API = os.getenv('SK_KRAKEN_API')
 SK_AUTH0 = os.getenv('SPACEKNOW_AUTH0')
 SK_USER_API = os.getenv('SK_USER_API')
+SK_CREDIT_API = os.getenv('SK_CREDIT_API')
 
 def prepare_auth_header(token):
   """ Create Authorization Header for POST requests at SpaceKnowAPI
@@ -23,11 +24,15 @@ def prepare_auth_header(token):
   return {'Content-type': 'application/json',
           'Authorization': 'Bearer {}'.format(token)}
 
-def validateAccessRights(access, userPermissions: list):
-  if access not in userPermissions:
-    raise SpaceKnowError('User is unauthorized to perform the operation', 401)
+def buildPermission(prefix, provider, dataset):
+  return prefix + '.' + provider + 'dataset'
 
-def process(url, data='', token=''):
+def validateAccessRights(permissionsNeeds: list, userPermissions: list):
+  for permission in permissionsNeeds:
+    if permission not in userPermissions: 
+      raise SpaceKnowError('User is unauthorized to perform the operation', 401)
+
+def process(url, data='', token='', isGET=False):
   """ Sends a request at SpaceKnow API.
     Arguments:
     url -- SpaceKnow endpoint
@@ -37,7 +42,10 @@ def process(url, data='', token=''):
   headers = prepare_auth_header(token) if token else ''
   
   try:
-    response = requests.post(url, data=data, headers=headers)
+    if not isGET:
+      response = requests.post(url, data=data, headers=headers)
+    else:
+      response = requests.get(url, data=data, headers=headers)
     if response.status_code >= 400:
         errors = response.json()
         if 'errorMessage' in errors:

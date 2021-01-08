@@ -41,7 +41,7 @@ class Pipeline(Thread):
       response = process(url, data=pipelineId, token=self.token)
       if 'status' not in response or \
         (response['status']!='RESOLVED' and 'nextTry' not in response) :
-        raise SpaceKnowError(('Invalid response during checking the pipeline\'s status: %s', 
+        raise SpaceKnowError(('Invalid response during checking the pipeline\'s status: %s',
                         pipelineId), 500)
       if response['status'] == 'RESOLVED':
         return True
@@ -51,7 +51,7 @@ class Pipeline(Thread):
         self.nextTry= response['nextTry']
         return False
     except SpaceKnowError as e:
-      utils.logger.error("Error %d during status checking at pipeline %s: %s" % 
+      utils.logger.error("Error %d during status checking at pipeline %s: %s" %
                     (e.status_code, self.id, e.error))
       self.error = e
       raise e
@@ -81,8 +81,8 @@ class Pipeline(Thread):
         time.sleep(self.nextTry)
       self.__return = self.__retrieve()
     except SpaceKnowError as e:
-        utils.logger.error("Error %d at pipeline %s: %s" % 
-                      (e.status_code, self.url, e.error)) 
+        utils.logger.error("Error %d at pipeline %s: %s" %
+                      (e.status_code, self.url, e.error))
 
   def join(self):
     super().join()
