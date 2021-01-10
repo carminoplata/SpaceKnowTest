@@ -15,7 +15,7 @@ class Pipeline(Thread):
     self.error = None
 
   def __initiate(self):
-    utils.logger.info("Initiate pipeline at %s" % self.url)
+    utils.spaceKnowLogger.info("Initiate pipeline at %s" % self.url)
     try:
       response = process(self.url+'/initiate', data=self.request, token=self.token)
       if 'pipelineId' not in response or 'nextTry' not in response or 'status' not in response:
@@ -29,7 +29,7 @@ class Pipeline(Thread):
       else:
         raise SpaceKnowError('Invalid status {}'.format(response['status']), 500)
     except SpaceKnowError as e:
-      utils.logger.error("Error %d during initiate phase: %s" %
+      utils.spaceKnowLogger.error("Error %d during initiate phase: %s" %
                     (e.status_code, e.error))
       self.error = e
       raise e
@@ -51,7 +51,7 @@ class Pipeline(Thread):
         self.nextTry= response['nextTry']
         return False
     except SpaceKnowError as e:
-      utils.logger.error("Error %d during status checking at pipeline %s: %s" %
+      utils.spaceKnowLogger.error("Error %d during status checking at pipeline %s: %s" %
                     (e.status_code, self.id, e.error))
       self.error = e
       raise e
@@ -69,7 +69,7 @@ class Pipeline(Thread):
       print("Imagery is not available yet. Retry in %d"% tryIn)
       time.sleep(tryIn)
   except SpaceKnowError as e:
-     logger.error("Error %d during status checking at pipeline %s: %s" % 
+     spaceKnowLogger.error("Error %d during status checking at pipeline %s: %s" % 
                     (e.status_code, pipelineId, e.error))
 """
   def run(self):
@@ -77,11 +77,11 @@ class Pipeline(Thread):
       self.nextTry, self.id = self.__initiate()
       time.sleep(self.nextTry)
       while not self.__isReady():
-        utils.logger.info("Imagery is not available yet. Retry in %d"% self.nextTry)
+        utils.spaceKnowLogger.info("Imagery is not available yet. Retry in %d"% self.nextTry)
         time.sleep(self.nextTry)
       self.__return = self.__retrieve()
     except SpaceKnowError as e:
-        utils.logger.error("Error %d at pipeline %s: %s" %
+        utils.spaceKnowLogger.error("Error %d at pipeline %s: %s" %
                       (e.status_code, self.url, e.error))
 
   def join(self):

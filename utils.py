@@ -10,7 +10,7 @@ from PIL import Image, ImageColor
 from requests.exceptions import ConnectionError
 
 logging.config.fileConfig('logging.conf')
-logger = logging.getLogger('SpaceKnow')
+spaceKnowLogger = logging.getLogger('SpaceKnow')
 load_dotenv()
 
 SK_IMAGE_API = os.getenv('SK_IMAGE_API')
@@ -57,16 +57,16 @@ def process(url, data='', token='', isGET=False):
         if 'errorMessage' in errors:
           raise SpaceKnowError(errors['errorMessage'], response.status_code)
         else:
-          logger.error('Invalid error received from the server')
+          spaceKnowLogger.error('Invalid error received from the server')
           message = 'SpaceKnow not available at the moment. Retry later!' \
             if response.status_code >= 500 else 'Invalid Request'
           raise SpaceKnowError(message, response.status_code)
     return response.json() if not isGET else response
   except (ConnectionError, requests.Timeout, requests.TooManyRedirects):
-      logger.error("Impossible to connect at %s" % url)
+      spaceKnowLogger.error("Impossible to connect at %s" % url)
       raise SpaceKnowError('Impossible to connect at %s' % url, -1)
   except JSONDecodeError:
-      logger.error("")
+      spaceKnowLogger.error("")
       raise SpaceKnowError('Response is not a valid JSON', -1)
 
 
@@ -85,10 +85,10 @@ def authenticate():
         raise SpaceKnowError('Token unavailable. Invalid credentials', 400)
       elif 'token_type'  not in authData or authData['token_type'] != 'bearer':
         raise SpaceKnowError('Invalid Token. Expected Bearer Token!', 500)
-      logger.debug('Token %s' % authData['id_token'])
+      spaceKnowLogger.debug('Token %s' % authData['id_token'])
       return authData['id_token']
     except SpaceKnowError as e:
-      logger.error("Error {}: {}".format(str(e.status_code), e.error))
+      spaceKnowLogger.error("Error {}: {}".format(str(e.status_code), e.error))
 
 def getPermissions(token):
   """ Get a list of operations provided by SpaceKnowAPI available for the user
@@ -101,7 +101,7 @@ def getPermissions(token):
     else:
       return jsonData['permissions']
   except SpaceKnowError as e:
-    logger.error("Error {}: {}".format(str(e.status_code), e.error))
+    spaceKnowLogger.error("Error {}: {}".format(str(e.status_code), e.error))
 
 def stitchImages(images: list, filename):
   """ Takes N PIL Images with same size and save in the file

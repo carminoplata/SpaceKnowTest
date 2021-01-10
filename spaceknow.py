@@ -15,7 +15,7 @@ from json import JSONDecodeError
 from kraken import KrakenConsumer, KrakenProducer, MapsQueue
 from pipeline import Pipeline
 from requests.exceptions import ConnectionError
-from utils import authenticate, getPermissions, process, logger, SpaceKnowError, \
+from utils import authenticate, getPermissions, process, SpaceKnowError, \
   validateAccessRights, buildPermission
 
 def createBrisbaneArea():
@@ -56,7 +56,7 @@ def searchImagery(permissions, token, extent):
   url = utils.SK_IMAGE_API + '/search'
   pipeline = Pipeline(url, token, prepare_searchReq(extent))
   pipeline.start()
-  print("Created Pipeline. Waiting for results...")
+  logger.info("Created Pipeline. Waiting for results...")
   response = pipeline.join()
   if not response or 'results' not in response or len(response['results'])==0:
     raise SpaceKnowError('Any imagery found in the response', 500)
@@ -68,7 +68,7 @@ def evaluatesCosts(scenes, extent, permissions, token):
   url = utils.SK_KRAKEN_API + '/dry-run'
   pipeline = Pipeline(url, token, data)
   pipeline.start()
-  print("Created Pipeline. Waiting for results...")
+  logger.info("Created Pipeline. Waiting for results...")
   analysis = pipeline.join()
   if not analysis or 'allocatedCredits' not in analysis:
     raise SpaceKnowError('Cost analysis is not available', 503)
@@ -92,7 +92,7 @@ def getImagery(scenes, token, permission, extent):
   producer = KrakenProducer('imagery', scenes, extent, imageriesQueue, token)
   consumer = KrakenConsumer(token, imageriesQueue, resource='truecolor.png',)
   producer.run()
-  print("Cars detection algortihm started")
+  logger.info("Cars detection algortihm started")
   producer.join()
   consumer.run('imagery.png')
 
@@ -106,7 +106,7 @@ def executeAnalysis(scenes, token, permissions, extent):
   producer = KrakenProducer('cars', scenes, extent, mapsQueue, token)
   consumer = KrakenConsumer(token, mapsQueue, resource='cars.png')
   producer.run()
-  print("Cars detection algortihm started")
+  logger.info("Cars detection algortihm started")
   producer.join()
   consumer.run('cars.png')
 
@@ -134,43 +134,44 @@ def hello_world():
 
 
 if __name__ == "__main__":
-  print("Authenticating at SpaceKnowAPI...")
+  logging.config.fileConfig('logging.conf')
+  logger = logging.getLogger('Main')
+  logger.info("Authenticating at SpaceKnowAPI...")
   token = authenticate()
   if not token or  len(token) == 0:
     logger.error("Invalid token!")
     exit()
-  print("Received token: %s" % token)
+  logger.info("Received token: %s" % token)
   permissions = getPermissions(token)
   if not permissions or len(permissions) == 0:
     logger.error("Impossible to check permission available for the users")
     exit()
-  print("Selecting Brisbane Airport Area for the analysis...")
+  logger.info("Selecting Brisbane Airport Area for the analysis...")
   area = createBrisbaneArea()
   try:
-    print("Downloading imagery for Staff Parking Lot...")
+    logger.info("Downloading imagery for Staff Parking Lot...")
     scenes =  searchImagery(permissions, token, area)
-    print("Downloaded %d scenes"% len(scenes))
-    print("Making cost analysis on all scenes...")
+    logger.info("Downloaded %d scenes"% len(scenes))
+    logger.info("Making cost analysis on all scenes...")
     costAnalysis = evaluatesCosts(scenes, area, permissions, token)
-    print("Brisbane Area total size: %.4f km2" % costAnalysis['ingestedKm2'])
-    print("Brisbane Area size to analyze: %.4f km2" % costAnalysis['analyzedKm2'])
-    print("Brisbane Area allocated size: %.4f km2" % costAnalysis['allocatedKm2'])
-    print("Credits required: %.4f" % costAnalysis['allocatedCredits'])
+    logger.info("Brisbane Area total size: %.4f km2" % costAnalysis['ingestedKm2'])
+    logger.info("Brisbane Area size to analyze: %.4f km2" % costAnalysis['analyzedKm2'])
+    logger.info("Brisbane Area allocated size: %.4f km2" % costAnalysis['allocatedKm2'])
+    logger.info("Credits required: %.4f" % costAnalysis['allocatedCredits'])
     userCredits = getCreditsAvailable(token, permissions)
     if userCredits < costAnalysis['allocatedCredits'] :
-      print("Impossible to make analysis!\n The user %s does not have enough"
+      logger.info("Impossible to make analysis!\n The user %s does not have enough"
             " credits.\n Available credits: %.2f" % (os.getenv('USERNAME'), 
             userCredits))
       exit()
    
-    print("My credits: %.2f" % userCredits)
-    print("Get Imagery")
+    logger.info("My credits: %.2f" % userCredits)
+    logger.info("Get Imagery")
     getImagery(scenes, token, permissions, area)
-
     executeAnalysis(scenes, token, permissions, area)
-    #print("Detected %d cars in Brisbane Area" % len(tiles))
+    #logger.info("Detected %d cars in Brisbane Area" % len(tiles))
   except SpaceKnowError as e:
     logger.error("Error {}: {}".format(str(e.status_code), e.error))
-    print("Error during the processing check spaceknow.log for details")
+    logger.info("Error during the processing check spaceknow.log for details")
     exit()
   #app.run()
