@@ -15,7 +15,7 @@ class Pipeline(Thread):
     self.error = None
 
   def __initiate(self):
-    utils.spaceKnowLogger.info("Initiate pipeline at %s" % self.url)
+    utils.spaceKnowLogger.debug("Initiate pipeline at %s" % self.url)
     try:
       response = process(self.url+'/initiate', data=self.request, token=self.token)
       if 'pipelineId' not in response or 'nextTry' not in response or 'status' not in response:
@@ -58,6 +58,7 @@ class Pipeline(Thread):
 
   def __retrieve(self):
     pipelineId = json.dumps({"pipelineId": self.id})
+    utils.spaceKnowLogger.debug("Retrieve pipeline at %s" % self.url)
     response = process(self.url+'/retrieve', data=pipelineId, token=self.token)
     return response
     

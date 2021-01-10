@@ -61,7 +61,7 @@ def process(url, data='', token='', isGET=False):
           message = 'SpaceKnow not available at the moment. Retry later!' \
             if response.status_code >= 500 else 'Invalid Request'
           raise SpaceKnowError(message, response.status_code)
-    return response.json() if not isGET else response
+    return response.json()
   except (ConnectionError, requests.Timeout, requests.TooManyRedirects):
       spaceKnowLogger.error("Impossible to connect at %s" % url)
       raise SpaceKnowError('Impossible to connect at %s' % url, -1)
@@ -114,8 +114,6 @@ def stitchImages(images: list, filename):
   for img in images:
     bigImage.paste(img, pos)
     pos = (pos[0] + img.width, 0)
-
-  bigImage.show()
   bigImage.save(filename)
 
 class SpaceKnowError(Exception):

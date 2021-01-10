@@ -1,5 +1,6 @@
-import json
 import geojson
+import json
+import kraken
 import logging
 import logging.config
 import os
@@ -12,7 +13,7 @@ from flask import Flask, request, jsonify
 from functools import wraps
 from geojson import GeometryCollection
 from json import JSONDecodeError
-from kraken import KrakenConsumer, KrakenProducer, MapsQueue
+from kraken import KrakenManager
 from pipeline import Pipeline
 from requests.exceptions import ConnectionError
 from utils import authenticate, getPermissions, process, SpaceKnowError, \
@@ -82,19 +83,21 @@ def getCreditsAvailable(token, permissions):
     raise SpaceKnowError('Invalid response from server', 500)
   return response['remainingCredit']
 
-def getImagery(scenes, token, permission, extent):
+def downloadCarImagery(scenes, token, permission, extent):
   permissionsNeeds = [os.getenv('KRAKEN_RELEASE'),
-                      buildPermission(os.getenv('ALGORITHM_CAR_DETECTION'),
+                      buildPermission(os.getenv('IMAGERY_IMAGES'),
                                       os.getenv('PROVIDER_GBDX'),
                                       os.getenv('GBDX_IDAHO_DB'))]
   validateAccessRights(permissionsNeeds, permissions)
-  imageriesQueue = MapsQueue(len(scenes))
-  producer = KrakenProducer('imagery', scenes, extent, imageriesQueue, token)
-  consumer = KrakenConsumer(token, imageriesQueue, resource='truecolor.png',)
-  producer.run()
-  logger.info("Cars detection algortihm started")
-  producer.join()
-  consumer.run('imagery.png')
+  return kraken.downloadMaps('cars', scenes, token, extent)
+
+def downloadImagery(scenes, token, permission, extent):
+  permissionsNeeds = [os.getenv('KRAKEN_RELEASE'),
+                      buildPermission(os.getenv('IMAGERY_IMAGES'),
+                                      os.getenv('PROVIDER_GBDX'),
+                                      os.getenv('GBDX_IDAHO_DB'))]
+  validateAccessRights(permissionsNeeds, permissions)
+  return kraken.downloadMaps('imagery', scenes, token, extent)
 
 def executeAnalysis(scenes, token, permissions, extent):
   permissionsNeeds = [os.getenv('KRAKEN_RELEASE'),
@@ -102,6 +105,7 @@ def executeAnalysis(scenes, token, permissions, extent):
                                       os.getenv('PROVIDER_GBDX'),
                                       os.getenv('GBDX_IDAHO_DB'))]
   validateAccessRights(permissionsNeeds, permissions)
+  """
   mapsQueue = MapsQueue(len(scenes))
   producer = KrakenProducer('cars', scenes, extent, mapsQueue, token)
   consumer = KrakenConsumer(token, mapsQueue, resource='cars.png')
@@ -109,6 +113,7 @@ def executeAnalysis(scenes, token, permissions, extent):
   logger.info("Cars detection algortihm started")
   producer.join()
   consumer.run('cars.png')
+  """
 
 """
 class SpaceKnowManager:
@@ -141,7 +146,7 @@ if __name__ == "__main__":
   if not token or  len(token) == 0:
     logger.error("Invalid token!")
     exit()
-  logger.info("Received token: %s" % token)
+  logger.info("Congratulations, you are in SpaceKnow!")
   permissions = getPermissions(token)
   if not permissions or len(permissions) == 0:
     logger.error("Impossible to check permission available for the users")
@@ -166,12 +171,32 @@ if __name__ == "__main__":
       exit()
    
     logger.info("My credits: %.2f" % userCredits)
-    logger.info("Get Imagery")
-    getImagery(scenes, token, permissions, area)
-    executeAnalysis(scenes, token, permissions, area)
-    #logger.info("Detected %d cars in Brisbane Area" % len(tiles))
+    logger.info("Downloading Imagery Maps...")
+    carMaps = downloadCarImagery(scenes, token, permissions, area)
+    logger.info("Downloaded %d imageries" % len(carMaps))
+    krakenManager = KrakenManager(logger=logger)
+    logger.info("Detecting cars inside imageries...")
+    results = krakenManager.process(carMaps, 'CAR_DETECTION')
+    if len(results) == 0:
+      logger.info("No cars was found in this area!")
+      exit()
+    total = 0
+    for mapId, pair in results.items():
+      cars = pair[0]
+      tiles = pair[1]
+      total += cars
+      logger.info("Found %d cars for mapId %s"% (cars, mapId))
+      logger.info("Building PNG file for mapId %s" % mapId[:-10])
+      krakenManager.process(carMaps, 'BUILD_CARS_PNG')
+
+    logger.info("Found %d cars in total" % total)
+    
+    logger.info("Downloading all analyzed imageries...")
+    imageryMaps = downloadImagery(scenes, token, permissions, area)
+    logger.info("Downloaded %d imageries" % len(imageryMaps))
+    logger.info("Building satellite images...")
+    krakenManager.process(imageryMaps, 'BUILD_PNG')
   except SpaceKnowError as e:
     logger.error("Error {}: {}".format(str(e.status_code), e.error))
     logger.info("Error during the processing check spaceknow.log for details")
     exit()
-  #app.run()
