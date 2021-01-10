@@ -1,6 +1,4 @@
-flask
-flask-cors
 geojson
 python-dotenv
-python-jose
 requests
+Pillow

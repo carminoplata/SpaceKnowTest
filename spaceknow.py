@@ -82,6 +82,20 @@ def getCreditsAvailable(token, permissions):
     raise SpaceKnowError('Invalid response from server', 500)
   return response['remainingCredit']
 
+def getImagery(scenes, token, permission, extent):
+  permissionsNeeds = [os.getenv('KRAKEN_RELEASE'),
+                      buildPermission(os.getenv('ALGORITHM_CAR_DETECTION'),
+                                      os.getenv('PROVIDER_GBDX'),
+                                      os.getenv('GBDX_IDAHO_DB'))]
+  validateAccessRights(permissionsNeeds, permissions)
+  imageriesQueue = MapsQueue(len(scenes))
+  producer = KrakenProducer('imagery', scenes, extent, imageriesQueue, token)
+  consumer = KrakenConsumer(token, imageriesQueue, resource='truecolor.png',)
+  producer.run()
+  print("Cars detection algortihm started")
+  producer.join()
+  consumer.run('imagery.png')
+
 def executeAnalysis(scenes, token, permissions, extent):
   permissionsNeeds = [os.getenv('KRAKEN_RELEASE'),
                       buildPermission(os.getenv('ALGORITHM_CAR_DETECTION'),
@@ -90,13 +104,11 @@ def executeAnalysis(scenes, token, permissions, extent):
   validateAccessRights(permissionsNeeds, permissions)
   mapsQueue = MapsQueue(len(scenes))
   producer = KrakenProducer('cars', scenes, extent, mapsQueue, token)
-  consumer = KrakenConsumer(mapsQueue, token)
-  producer.start()
-  consumer.start()
+  consumer = KrakenConsumer(token, mapsQueue, resource='cars.png')
+  producer.run()
   print("Cars detection algortihm started")
   producer.join()
-  tiles = consumer.join()
-  return tiles
+  consumer.run('cars.png')
 
 """
 class SpaceKnowManager:
@@ -124,7 +136,7 @@ def hello_world():
 if __name__ == "__main__":
   print("Authenticating at SpaceKnowAPI...")
   token = authenticate()
-  if len(token) == 0:
+  if not token or  len(token) == 0:
     logger.error("Invalid token!")
     exit()
   print("Received token: %s" % token)
@@ -152,8 +164,11 @@ if __name__ == "__main__":
       exit()
    
     print("My credits: %.2f" % userCredits)
-    tiles = executeAnalysis(scenes, permissions, token, area)
-    print("Detected %d cars in Brisbane Area" % len(tiles))
+    print("Get Imagery")
+    getImagery(scenes, token, permissions, area)
+
+    executeAnalysis(scenes, token, permissions, area)
+    #print("Detected %d cars in Brisbane Area" % len(tiles))
   except SpaceKnowError as e:
     logger.error("Error {}: {}".format(str(e.status_code), e.error))
     print("Error during the processing check spaceknow.log for details")

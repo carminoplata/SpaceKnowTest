@@ -9,8 +9,7 @@ Before running the script, you need to install all libraries provided into requi
 
 Inside requirements.txt, you will find:
 
-* flask: micro web Python framework for developing web applications
-* flask-cors: Flask extension for handling Cross Origin Resource Sharing (CORS)
 * geojson: python library for encoding and decoding JSON Data
 * python-dotenv: module python for using `.env` configuration file
-* python-jose: module python for encrypting and/or signing content inside web application
+* requests: python library to make and manage HTTP Request
+* Pillow: python library for image processing

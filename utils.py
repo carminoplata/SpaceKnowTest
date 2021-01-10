@@ -1,10 +1,12 @@
 import logging
 import logging.config
+import numpy as np
 import os
 import requests
 
 from dotenv import load_dotenv
 from json import JSONDecodeError
+from PIL import Image, ImageColor
 from requests.exceptions import ConnectionError
 
 logging.config.fileConfig('logging.conf')
@@ -18,14 +20,18 @@ SK_AUTH0 = os.getenv('SPACEKNOW_AUTH0')
 SK_USER_API = os.getenv('SK_USER_API')
 SK_CREDIT_API = os.getenv('SK_CREDIT_API')
 
+def buildURL(*args):
+  return '/'.join(args)
+
 def prepare_auth_header(token):
   """ Create Authorization Header for POST requests at SpaceKnowAPI
   """
   return {'Content-type': 'application/json',
           'Authorization': 'Bearer {}'.format(token)}
 
+
 def buildPermission(prefix, provider, dataset):
-  return prefix + '.' + provider + 'dataset'
+  return prefix + '.' + provider + '.' + dataset
 
 def validateAccessRights(permissionsNeeds: list, userPermissions: list):
   for permission in permissionsNeeds:
@@ -55,7 +61,7 @@ def process(url, data='', token='', isGET=False):
           message = 'SpaceKnow not available at the moment. Retry later!' \
             if response.status_code >= 500 else 'Invalid Request'
           raise SpaceKnowError(message, response.status_code)
-    return response.json()
+    return response.json() if not isGET else response
   except (ConnectionError, requests.Timeout, requests.TooManyRedirects):
       logger.error("Impossible to connect at %s" % url)
       raise SpaceKnowError('Impossible to connect at %s' % url, -1)
@@ -96,6 +102,21 @@ def getPermissions(token):
       return jsonData['permissions']
   except SpaceKnowError as e:
     logger.error("Error {}: {}".format(str(e.status_code), e.error))
+
+def stitchImages(images: list, filename):
+  """ Takes N PIL Images with same size and save in the file
+      Returns a new image that appends the images side-by-side. 
+  """
+  num_images = len(images)
+  finalWidth =  images[0].width * num_images
+  bigImage = Image.new(images[0].mode,(finalWidth, images[0].height), color='white')
+  pos = (0,0)
+  for img in images:
+    bigImage.paste(img, pos)
+    pos = (pos[0] + img.width, 0)
+
+  bigImage.show()
+  bigImage.save(filename)
 
 class SpaceKnowError(Exception):
   def __init__(self, error, status_code):
