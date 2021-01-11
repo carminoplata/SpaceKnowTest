@@ -7,6 +7,7 @@ import os
 import requests
 import time
 import utils
+import sys
 
 from dotenv import load_dotenv
 from flask import Flask, request, jsonify
@@ -19,9 +20,14 @@ from requests.exceptions import ConnectionError
 from utils import authenticate, getPermissions, process, SpaceKnowError, \
   validateAccessRights, buildPermission
 
-def createBrisbaneArea():
+logging.config.fileConfig('logging.conf')
+logger = logging.getLogger('Main')
+
+def createBrisbaneArea(filename = ''):
   try:
-    with open(os.getenv('GEOJSON_FILE')) as fp:
+    if not filename or len(filename) == 0:
+      filename = os.getenv('GEOJSON_FILE')
+    with open(filename) as fp:
       geoObj = geojson.load(fp)
       if not geoObj.is_valid:
         raise SpaceKnowError('Invalid GeoJson file!', 400)
@@ -83,7 +89,7 @@ def getCreditsAvailable(token, permissions):
     raise SpaceKnowError('Invalid response from server', 500)
   return response['remainingCredit']
 
-def downloadCarImagery(scenes, token, permission, extent):
+def downloadCarImagery(scenes, token, permissions, extent):
   permissionsNeeds = [os.getenv('KRAKEN_RELEASE'),
                       buildPermission(os.getenv('IMAGERY_IMAGES'),
                                       os.getenv('PROVIDER_GBDX'),
@@ -91,7 +97,7 @@ def downloadCarImagery(scenes, token, permission, extent):
   validateAccessRights(permissionsNeeds, permissions)
   return kraken.downloadMaps('cars', scenes, token, extent)
 
-def downloadImagery(scenes, token, permission, extent):
+def downloadImagery(scenes, token, permissions, extent):
   permissionsNeeds = [os.getenv('KRAKEN_RELEASE'),
                       buildPermission(os.getenv('IMAGERY_IMAGES'),
                                       os.getenv('PROVIDER_GBDX'),
@@ -99,22 +105,28 @@ def downloadImagery(scenes, token, permission, extent):
   validateAccessRights(permissionsNeeds, permissions)
   return kraken.downloadMaps('imagery', scenes, token, extent)
 
-
-if __name__ == "__main__":
-  logging.config.fileConfig('logging.conf')
-  logger = logging.getLogger('Main')
-  logger.info("Authenticating at SpaceKnowAPI...")
-  token = authenticate()
+def getConfigurations(user='', password=''):
+  if not user or len(user)==0:
+    user = os.getenv('USERNAME')
+  if not password or len(password)==0:
+    password = os.getenv('PASSWORD')
+  
+  token = authenticate(user, password)
   if not token or  len(token) == 0:
     logger.error("Invalid token!")
     exit()
   logger.info("Congratulations, you are in SpaceKnow!")
+  return token
+
+def runCarDetections(user='', password='', filename=''):
+  logger.info("Authenticating at SpaceKnowAPI...")
+  token = getConfigurations(user, password)
   permissions = getPermissions(token)
   if not permissions or len(permissions) == 0:
     logger.error("Impossible to check permission available for the users")
     exit()
   logger.info("Selecting Brisbane Airport Area for the analysis...")
-  area = createBrisbaneArea()
+  area = createBrisbaneArea(filename)
   try:
     logger.info("Downloading imagery for Staff Parking Lot...")
     scenes =  searchImagery(permissions, token, area)
@@ -166,3 +178,16 @@ if __name__ == "__main__":
     logger.error("Error {}: {}".format(str(e.status_code), e.error))
     logger.info("Error during the processing check spaceknow.log for details")
     exit()
+
+if __name__ == "__main__":
+  
+  if len(sys.argv) == 1:
+    runCarDetections()
+  elif len(sys.argv) < 3:
+    print("Error: Invalid Arguments! Run at least as spaceknow.py <username> "
+          "<password>")
+  else:
+    user = sys.argv[1]
+    password = sys.argv[2]
+    filename = sys.argv[3] if len(sys.argv)==4 else ''
+    runCarDetections(user, password, filename)

@@ -70,12 +70,12 @@ def process(url, data='', token='', isGET=False):
       raise SpaceKnowError('Response is not a valid JSON', -1)
 
 
-def authenticate():
+def authenticate(user, password):
     """ Get a Token valid for 10 hours
     """
     data = {"client_id": os.getenv('SPACEKNOW_CLIENT_ID'),
-            "username": os.getenv('USERNAME'),
-            "password": os.getenv('PASSWORD'),
+            "username": user,
+            "password": password,
             "connection": "Username-Password-Authentication",
             "grant_type": "password",
             "scope": "openid"}
