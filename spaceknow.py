@@ -99,44 +99,6 @@ def downloadImagery(scenes, token, permission, extent):
   validateAccessRights(permissionsNeeds, permissions)
   return kraken.downloadMaps('imagery', scenes, token, extent)
 
-def executeAnalysis(scenes, token, permissions, extent):
-  permissionsNeeds = [os.getenv('KRAKEN_RELEASE'),
-                      buildPermission(os.getenv('ALGORITHM_CAR_DETECTION'),
-                                      os.getenv('PROVIDER_GBDX'),
-                                      os.getenv('GBDX_IDAHO_DB'))]
-  validateAccessRights(permissionsNeeds, permissions)
-  """
-  mapsQueue = MapsQueue(len(scenes))
-  producer = KrakenProducer('cars', scenes, extent, mapsQueue, token)
-  consumer = KrakenConsumer(token, mapsQueue, resource='cars.png')
-  producer.run()
-  logger.info("Cars detection algortihm started")
-  producer.join()
-  consumer.run('cars.png')
-  """
-
-"""
-class SpaceKnowManager:
-
-  def __init__(self):
-    logger.debug('Initialize SpaceKnowManager')
-    
-
-@app.errorhandler(SpaceKnowError)
-def handle_auth_error(ex):
-  response = jsonify(ex.error)
-  response.status_code = ex.status_code
-  return response
-
-@app.route('/')
-def hello_world():
-  try:
-    authenticate()
-  except SpaceKnowError as e:
-    app.logger.error(e.error['code'] + ': ' + e.error['description'])
-  return 'Hello World!'
-"""
-
 
 if __name__ == "__main__":
   logging.config.fileConfig('logging.conf')
@@ -174,7 +136,7 @@ if __name__ == "__main__":
     logger.info("Downloading Imagery Maps...")
     carMaps = downloadCarImagery(scenes, token, permissions, area)
     logger.info("Downloaded %d imageries" % len(carMaps))
-    krakenManager = KrakenManager(logger=logger)
+    krakenManager = KrakenManager()
     logger.info("Detecting cars inside imageries...")
     results = krakenManager.process(carMaps, 'CAR_DETECTION')
     if len(results) == 0:
@@ -185,9 +147,10 @@ if __name__ == "__main__":
       cars = pair[0]
       tiles = pair[1]
       total += cars
-      logger.info("Found %d cars for mapId %s"% (cars, mapId))
-      logger.info("Building PNG file for mapId %s" % mapId[:-10])
-      krakenManager.process(carMaps, 'BUILD_CARS_PNG')
+      logger.info("Found %d cars for mapId %s"% (cars, mapId[-10:]))
+      logger.info("Building PNG file for mapId %s" % mapId[-10:])
+      krakenManager.build_image(mapId, tiles, 'BUILD_CARS_PNG')
+      logger.info("Created image %s_detection.png"%mapId[-10:])
 
     logger.info("Found %d cars in total" % total)
     
@@ -196,6 +159,9 @@ if __name__ == "__main__":
     logger.info("Downloaded %d imageries" % len(imageryMaps))
     logger.info("Building satellite images...")
     krakenManager.process(imageryMaps, 'BUILD_PNG')
+    logger.info("All satellite images are ready!")
+    logger.info("Summary: \n Cars in the area: %d \n All satellite and tiles images" 
+      " are in output folder!" % total)
   except SpaceKnowError as e:
     logger.error("Error {}: {}".format(str(e.status_code), e.error))
     logger.info("Error during the processing check spaceknow.log for details")
